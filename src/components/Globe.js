@@ -1,7 +1,6 @@
 import React, { Component } from 'react'
-import * as topojson from "topojson"
 import * as d3 from 'd3'
-import Topology from "./geoJson/rough.geo.json"
+import GeoData from "./geoJson/rough.geo.json"
 import versor from "versor"
 
 const animationSpeed = 6000
@@ -13,7 +12,7 @@ export default class Globe extends Component {
       this.width = this.props.width | 400;
       this.height = this.props.height | 400;
 
-      this.geoJson = topojson.feature(Topology, Topology.objects.ne_110m_admin_0_countries)
+      this.geoJson = GeoData
       this.sphere = ({ type: "Sphere" })
       this.projection = null;
       this.svg = null;
