@@ -61,7 +61,7 @@ function App() {
                <select name="projectionSelector" id="projectionSelector" onChange={(e) => changeProjection(e)}>
                   <option value="Orthographic">Orthographic</option>
                   <option value="Airy">Airy</option>
-                  <option value="Armadillo">Armadillo</option>
+                  {/* <option value="Armadillo">Armadillo</option> */}
                   <option value="geoAzimuthalEqualArea">geoAzimuthalEqualArea</option>
                   <option value="geoBromley">geoBromley</option>
                   <option value="geoCylindricalEqualArea">geoCylindricalEqualArea</option>
