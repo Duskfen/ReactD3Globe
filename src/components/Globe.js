@@ -17,14 +17,25 @@ export default class Globe extends Component {
 
       this.dimensionsPerPropsSpecified = this.props.width && this.props.height;
 
+      this.updateProjection = false;
+      this.currentProjection = this.props.Projection.function || d3.geoOrthographic()
+      if (this.props.Projection) this.currentProjectionName = this.props.Projection.name;
+      else this.currentProjectionName = "Orthographic";
+
+      console.log(this.currentProjection)
+      console.log(d3.geoOrthographic)
+
       this.width = this.props.width;
       this.height = this.props.height;
 
       this.sphere = ({ type: "Sphere" })
       this.projection = null;
       this.svg = null;
+
+
    }
- 
+
+
    createTranslucentGlobe = () => {
       let canvas = d3.select("#globe")
          .append("canvas")
@@ -36,15 +47,15 @@ export default class Globe extends Component {
 
       canvas = canvas._groups[0][0]
 
-      this.projection = d3.geoOrthographic()
-         .rotate([-10, -50])
+      this.projection = this.currentProjection
+         .rotate([0,0])
+         //.rotate([-10, -50]) //initial rotate to ~ center Austria (on orthographic earth usefull)
          .precision(0.1)
          .fitSize([this.width, this.height], this.sphere)
 
-
       let path = d3.geoPath(this.projection, canvasContext);
 
-      this.projection.scale(600)
+      this.projection.scale(200) //initial zoom
       return d3.select(canvasContext.canvas)
          .call(this.zoom(this.projection)
             .on("zoom.render", () => this.renderWorld(GeoData, canvasContext, path, canvas)) //only a rough map while zooming/rotating (speed reasons)
@@ -72,14 +83,24 @@ export default class Globe extends Component {
       context.stroke()
       context.strokeStyle = "#E5E5E5";
 
-      //translucent part (by "fil" -> https://observablehq.com/@d3/projection-reflectx) 
-      const r = this.projection.rotate();
-      this.projection.reflectX(true).rotate([r[0] + 180, -r[1], -r[2]]);
+      if (this.currentProjectionName === "Orthographic") {
+         //translucent part (by "fil" -> https://observablehq.com/@d3/projection-reflectx) 
+         const r = this.projection.rotate();
+         this.projection.reflectX(true).rotate([r[0] + 180, -r[1], -r[2]]);
+         context.beginPath();
+         path(world);
+         context.fillStyle = "rgba(0,0,0,0.1)";
+         context.fill();
+         this.projection.reflectX(false).rotate(r);
+      }
+
+
+      var graticule = d3.geoGraticule10()
+
       context.beginPath();
-      path(world);
-      context.fillStyle = "rgba(0,0,0,0.1)";
-      context.fill();
-      this.projection.reflectX(false).rotate(r);
+      path(graticule);
+      context.strokeStyle = "#ccc";
+      context.stroke();
 
       //countries, stroke are the white gaps between them
       context.beginPath();
@@ -97,9 +118,6 @@ export default class Globe extends Component {
       // context.fill();
 
       this.updatePointsOnGlobe();
-
-      context.beginPath();
-      path(this.sphere);
    }
 
    updatePointsOnGlobe = () => {
@@ -112,26 +130,26 @@ export default class Globe extends Component {
          .attr("cx", (point) => this.projection(point)[0])
          .attr("cy", (point) => this.projection(point)[1])
          .attr("opacity", (point) => {
-            if(this.isPointVisible(this.projection)(point))return 1
+            if (this.isPointVisible(this.projection)(point)) return 1
             else return 0;
          });
    }
 
    renderNewPointOnGlobe = (point) => {
 
-      let circle = this.svg.append("circle") 
-      .data([point])
-      .attr("class", "globepoint")
-      .attr('r', 2)
-      .attr("cx", (point) => this.projection(point)[0])
-      .attr("cy", (point) => this.projection(point)[1])
-      .attr("data", point).node()
+      let circle = this.svg.append("circle")
+         .data([point])
+         .attr("class", "globepoint")
+         .attr('r', 2)
+         .attr("cx", (point) => this.projection(point)[0])
+         .attr("cy", (point) => this.projection(point)[1])
+         .attr("data", point).node()
 
       let anim = circle.animate([
-         {r:"0px"},
-         {r:"10px"},
-         {r:"0px"},
-      ], {duration: animationSpeed, easing: "ease-in-out"})
+         { r: "0px" },
+         { r: "10px" },
+         { r: "0px" },
+      ], { duration: animationSpeed, easing: "ease-in-out" })
 
       //Attention, if you wan't to remove points manually (after a specific time, uncomment following line)
       anim.onfinish = () => circle.remove();
@@ -140,7 +158,7 @@ export default class Globe extends Component {
    // -------------------------- temporary (remove if real datapoints are implemented) --------------------------
    //min and max are included
    randomIntFromInterval = (min, max) => Math.floor(Math.random() * (max - min + 1) + min);
-   createRandomPoint(){
+   createRandomPoint() {
       //longitude -180 to 180
       //latitude 0 to 90
       return [this.randomIntFromInterval(-180, 180), this.randomIntFromInterval(0, 90)]
@@ -247,7 +265,7 @@ export default class Globe extends Component {
    componentDidMount() {
       let globe = document.querySelector("#globe")
 
-      if(!this.dimensionsPerPropsSpecified){
+      if (!this.dimensionsPerPropsSpecified) {
          this.width = globe.clientWidth; //set width to globe width (currently 100vw 100vh)
          this.height = globe.clientHeight; //note: the globe width also applies to the globepoints
       }
@@ -256,23 +274,41 @@ export default class Globe extends Component {
       this.createTranslucentGlobe();
 
       this.randomPointSpawning(); //TODO work with real data and not random points
-                                  //API polling? or Sockets? (sockets are a bit of a overhead i guess but idk..)
+      //API polling? or Sockets? (sockets are a bit of a overhead i guess but idk..)
 
       window.addEventListener("resize", this.windowResizeEventHandler);
+   }
+
+   getSnapshotBeforeUpdate(prevProps){
+      if(prevProps.Projection !== this.props.Projection){
+         this.updateProjection = true;
+      }
+      return null;
+   }
+   componentDidUpdate(){
+      if(this.updateProjection){
+         this.updateProjection = false;
+         this.currentProjection = this.props.Projection.function;
+         this.currentProjectionName = this.props.Projection.name;
+         document.querySelector("#globe canvas").remove();
+         this.createTranslucentGlobe();
+      }
    }
 
    windowResizeEventHandler = () => {
       //if resized, update the dimensions of the canvas and svg (all points get removed :( ))
       // future: maybe just update the width and height properties so you don't have to rerender and the points doesn't get deleted
-      let globe = document.querySelector("#globe canvas")
+      let globe = document.querySelector("#globe")
       let svg = document.querySelector("#globepoints svg")
 
-      if(!this.dimensionsPerPropsSpecified){
+      if (!this.dimensionsPerPropsSpecified) {
          this.width = globe.clientWidth;
          this.height = globe.clientHeight;
       }
+
       svg.remove()
-      globe.remove()
+      console.log(globe)
+      globe.childNodes[0].remove(); //remove canvas
       this.createTranslucentGlobe();
       this.initializeSVG();
    }
