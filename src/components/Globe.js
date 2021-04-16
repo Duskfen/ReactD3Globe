@@ -1,26 +1,31 @@
 import React, { Component } from 'react'
 import * as d3 from 'd3'
 import GeoData from "./geoJson/rough.geo.json"
-import versor from "versor"
+import versor from "versor" //versor is used for rotating the globe 
 
-const animationSpeed = 6000
+//maybe change to configurable variable if needed
+const animationSpeed = 6000;
+
+// if you wonder why I render the world in canvas and the datapoints in svg:
+// -> It's because of the animations. I don't know how to animate in canvas.. 
+// -> so I use svg with Element.animate() javascript function which lets me use
+//    css animations (-> good performance)
 
 export default class Globe extends Component {
    constructor(props) {
       super(props);
 
-      this.width = this.props.width | 400;
-      this.height = this.props.height | 400;
+      this.dimensionsPerPropsSpecified = this.props.width && this.props.height;
 
-      this.geoJson = GeoData
+      this.width = this.props.width;
+      this.height = this.props.height;
+
       this.sphere = ({ type: "Sphere" })
       this.projection = null;
       this.svg = null;
-
-      this.currentPoints = [];
    }
-
-   createReflectedGlobe = () => {
+ 
+   createTranslucentGlobe = () => {
       let canvas = d3.select("#globe")
          .append("canvas")
          .attr("width", this.width)
@@ -42,9 +47,9 @@ export default class Globe extends Component {
       this.projection.scale(600)
       return d3.select(canvasContext.canvas)
          .call(this.zoom(this.projection)
-            .on("zoom.render", () => this.renderWorld(this.geoJson, canvasContext, path, canvas))
-            .on("end.render", () => this.renderWorld(this.geoJson, canvasContext, path, canvas)))
-         .call(() => this.renderWorld(this.geoJson, canvasContext, path, canvas))
+            .on("zoom.render", () => this.renderWorld(GeoData, canvasContext, path, canvas)) //only a rough map while zooming/rotating (speed reasons)
+            .on("end.render", () => this.renderWorld(GeoData, canvasContext, path, canvas))) //could specify a more detailed world
+         .call(() => this.renderWorld(GeoData, canvasContext, path, canvas)) //could specify a more detailed world
          .node();
    }
 
@@ -56,6 +61,7 @@ export default class Globe extends Component {
    }
 
    renderWorld(world, context, path, canvas) {
+      //clear canvas
       context.clearRect(0, 0, canvas.width, canvas.height);
 
       context.lineWidth = 0.3;
@@ -66,16 +72,16 @@ export default class Globe extends Component {
       context.stroke()
       context.strokeStyle = "#E5E5E5";
 
+      //translucent part (by "fil" -> https://observablehq.com/@d3/projection-reflectx) 
       const r = this.projection.rotate();
-
       this.projection.reflectX(true).rotate([r[0] + 180, -r[1], -r[2]]);
-
       context.beginPath();
       path(world);
       context.fillStyle = "rgba(0,0,0,0.1)";
       context.fill();
       this.projection.reflectX(false).rotate(r);
 
+      //countries, stroke are the white gaps between them
       context.beginPath();
       path(world);
       context.fillStyle = "rgba(0,0,0,1)";
@@ -83,35 +89,40 @@ export default class Globe extends Component {
       context.stroke()
       context.strokeStyle = "white";
 
+      // if you want to render the datapoints via canvas
       // context.beginPath(); //elements are now rendered with svg, to support better animations;
       // path.pointRadius([3])
       // path({type: "MultiPoint", coordinates:points});
       // context.fillStyle="tomato"
       // context.fill();
 
-      this.UpdatePointsOnGlobe();
+      this.updatePointsOnGlobe();
 
       context.beginPath();
       path(this.sphere);
    }
 
-   UpdatePointsOnGlobe = () => {
+   updatePointsOnGlobe = () => {
+
+      //select all existing circles and update their coordinates
+      //if they are not visible on the earth (on the backside), change their opacity to 0
+
       let circles = this.svg.selectAll("circle");
       circles
-         // .data(filteredPoints)
          .attr("cx", (point) => this.projection(point)[0])
          .attr("cy", (point) => this.projection(point)[1])
          .attr("opacity", (point) => {
-            if(this.testVisibility(this.projection)(point))return 1
+            if(this.isPointVisible(this.projection)(point))return 1
             else return 0;
          });
    }
 
-   RenderNewPointOnGlobe = (point) => {
+   renderNewPointOnGlobe = (point) => {
+
       let circle = this.svg.append("circle") 
       .data([point])
       .attr("class", "globepoint")
-      .attr('r', 8)
+      .attr('r', 2)
       .attr("cx", (point) => this.projection(point)[0])
       .attr("cy", (point) => this.projection(point)[1])
       .attr("data", point).node()
@@ -122,35 +133,36 @@ export default class Globe extends Component {
          {r:"0px"},
       ], {duration: animationSpeed, easing: "ease-in-out"})
 
+      //Attention, if you wan't to remove points manually (after a specific time, uncomment following line)
       anim.onfinish = () => circle.remove();
    }
 
+   // -------------------------- temporary (remove if real datapoints are implemented) --------------------------
    //min and max are included
    randomIntFromInterval = (min, max) => Math.floor(Math.random() * (max - min + 1) + min);
-   CreateRandomPoint(){
+   createRandomPoint(){
       //longitude -180 to 180
       //latitude 0 to 90
       return [this.randomIntFromInterval(-180, 180), this.randomIntFromInterval(0, 90)]
 
    }
-
-   RandomPointSpawning = () => {
-      
-      this.RenderNewPointOnGlobe(this.CreateRandomPoint());
-
-      setTimeout(this.RandomPointSpawning, this.randomIntFromInterval(10, 90))
+   randomPointSpawning = () => {
+      this.renderNewPointOnGlobe(this.createRandomPoint());
+      setTimeout(this.randomPointSpawning, this.randomIntFromInterval(10, 90))
    }
+   // -------------------------- end temporary ------------------------------------------------------------------
 
-
-   testVisibility(projection) {
+   isPointVisible(projection) {
       let visible;
       const stream = projection.stream({ point() { visible = true; } });
 
-      //visible is set to false, if a point is outside the stream, don't set visible to true, 
+      //visible is set to false;
+      // if a point is outside the stream, don't set visible to true, 
       // else set visible to true, return visible
       return ([x, y]) => (visible = false, stream.point(x, y), visible);
    }
 
+   // zoom by "Fil" -> https://observablehq.com/d/1ea380bf05fbf68c@322
    zoom(projection, {
       // Capture the projection’s original scale, before any zooming.
       scale = projection._scale === undefined
@@ -225,36 +237,43 @@ export default class Globe extends Component {
       return (
          <>
             <div id="globe">
-               {/* {this.createNormalGlobe()} */}
             </div>
             <div id="globepoints">
             </div>
-
          </>
       )
    }
+
    componentDidMount() {
       let globe = document.querySelector("#globe")
 
-      this.width = globe.clientWidth;
-      this.height = globe.clientHeight;
+      if(!this.dimensionsPerPropsSpecified){
+         this.width = globe.clientWidth; //set width to globe width (currently 100vw 100vh)
+         this.height = globe.clientHeight; //note: the globe width also applies to the globepoints
+      }
 
       this.initializeSVG();
-      this.createReflectedGlobe();
-      this.RandomPointSpawning();
+      this.createTranslucentGlobe();
 
-      window.addEventListener("resize", this.WindowEventHandler);
+      this.randomPointSpawning(); //TODO work with real data and not random points
+                                  //API polling? or Sockets? (sockets are a bit of a overhead i guess but idk..)
+
+      window.addEventListener("resize", this.windowResizeEventHandler);
    }
 
-   WindowEventHandler = () => {
-      let globe = document.querySelector("#globe")
+   windowResizeEventHandler = () => {
+      //if resized, update the dimensions of the canvas and svg (all points get removed :( ))
+      // future: maybe just update the width and height properties so you don't have to rerender and the points doesn't get deleted
+      let globe = document.querySelector("#globe canvas")
       let svg = document.querySelector("#globepoints svg")
 
-      this.width = globe.clientWidth;
-      this.height = globe.clientHeight;
+      if(!this.dimensionsPerPropsSpecified){
+         this.width = globe.clientWidth;
+         this.height = globe.clientHeight;
+      }
       svg.remove()
-      globe.childNodes[0].remove()
-      this.createReflectedGlobe();
+      globe.remove()
+      this.createTranslucentGlobe();
       this.initializeSVG();
    }
 }

@@ -1,2 +1,0 @@
-body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Roboto","Oxygen","Ubuntu","Cantarell","Fira Sans","Droid Sans","Helvetica Neue",sans-serif;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}code{font-family:source-code-pro,Menlo,Monaco,Consolas,"Courier New",monospace}.App{text-align:center}#globe,#globepoints{position:absolute;top:0;left:0;width:100vw;height:100vh;z-index:-2;overflow:hidden}#globepoints{z-index:-1;pointer-events:none}.globepoint{fill:#b1c63c}
-/*# sourceMappingURL=main.3f14e1a3.chunk.css.map */
